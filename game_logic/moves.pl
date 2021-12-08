@@ -27,7 +27,7 @@ piece_helper(cell(ant,Color,PiledUp,Row,Column),Possibilities) :-
     \+is_surrounded(cell(ant,Color,PiledUp,Row,Column)),
     ant_valid_moves(cell(ant,Color,PiledUp,Row,Column),WCells),
     return_moves(WCells,[],Possibilities).
-piece_helper(cell(grasshooper,Color,PiledUp,Row,Column),Possibilities) :-
+piece_helper(cell(grasshopper,Color,PiledUp,Row,Column),Possibilities) :-
     findall(JCell, grasshopper_valid_moves(cell(grasshopper,Color,PiledUp,Row,Column),JCell), JCells),
     return_moves(JCells,[],Possibilities).
 piece_helper(cell(beetle,Color,PiledUp,Row,Column),Possibilities) :-
@@ -50,32 +50,53 @@ piece_helper(cell(pillbug,Color,PiledUp,Row,Column),Possibilities) :-
     \+is_surrounded(cell(pillbug,Color,PiledUp,Row,Column)),
      findall(DCell, pillbug_valid_moves(cell(pillbug,Color,PiledUp,Row,Column),DCell), DCells),
      return_moves(DCells,[], Moves),
-     findall(MCell, bug_movable_by_pillbug(cell(pillbug,Color,PiledUp,Row,Column),MCell),MCells),
+     findall(MCell, bug_movable_by_pillbug(cell(pillbug,Color,PiledUp,Row,Column),Color,MCell),MCells),
      findall(VCell, valid_position_to_move_a_bug(cell(pillbug,Color,PiledUp,Row,Column),VCell),VCells),
+     return_moves(VCells,[],ECells),
      append([Moves],[MCells],MyList),
-     append(MyList,VCells,Possibilities).
+     append(MyList,[ECells],Possibilities).
 
 beetle_valid_moves(OCell,DCell):-
     get_neighbor_cell(OCell,NCell),
-    connected_to_hive_without_origin_cell(OCell,NCell),
+    empty_cell(NCell),
+    (
+      (
+        top_of_pile(OCell),
+        connected_to_hive(NCell)
+      );
+      (
+        \+top_of_pile(OCell),
+        can_slide(OCell,NCell),
+        connected_to_hive_without_origin_cell(OCell,NCell)
+      )
+    ),
+    DCell = NCell.
+
+beetle_valid_moves(OCell,DCell):-
+    get_neighbor_cell(OCell,NCell),
+    \+empty_cell(NCell),
     DCell = NCell.
 
 queenbee_valid_moves(OCell,DCell) :-
     get_neighbor_cell(OCell,NCell),
     empty_cell(NCell),
+    can_slide(OCell,NCell),
     connected_to_hive_without_origin_cell(OCell,NCell),
     DCell = NCell.
 
 spider_valid_moves(OCell,DCell) :-
     get_neighbor_cell(OCell,Step1),
     empty_cell(Step1),
+    can_slide(OCell,Step1),
     connected_to_hive_without_origin_cell(OCell,Step1),
     get_neighbor_cell(Step1,Step2),
     empty_cell(Step2),
+    can_slide(Step1,Step2),
     connected_to_hive_without_origin_cell(OCell,Step2),
     Step2 \== OCell,
     get_neighbor_cell(Step2,Step3),
     empty_cell(Step3),
+    can_slide(Step2,Step3),
     connected_to_hive_without_origin_cell(OCell,Step3),
     Step3 \== Step1,
     DCell = Step3.
@@ -83,16 +104,16 @@ spider_valid_moves(OCell,DCell) :-
 ladybug_valid_moves(OCell,DCell) :-
     get_neighbor_cell(OCell,Step1),
     \+ empty_cell(Step1),
-    get_neighbor_cell(OCell,Step2),
+    get_neighbor_cell(Step1,Step2),
     \+ empty_cell(Step2),
     Step2 \== OCell,
-    get_neighbor_cell(OCell,Step3),
+    get_neighbor_cell(Step2,Step3),
     empty_cell(Step3),
     DCell = Step3.
 
 mosquito_valid_moves(cell(mosquito,Co,P,R,C),Moves) :-
     top_of_pile(cell(mosquito,Co,P,R,C)),
-    piece_helper(cell(ladybug,Co,P,R,C),Moves).
+    piece_helper(cell(beetle,Co,P,R,C),Moves).
 
 mosquito_valid_moves(cell(mosquito,Co,P,R,C),Moves) :-
     \+top_of_pile(cell(mosquito,Co,P,R,C)),
@@ -106,30 +127,40 @@ valid_neighbor_mosquito(MCell,NCell) :-
     NCell = Cell.
 
 get_mosquito_moves(cell(mosquito,Co,P,R,C),[cell(Bug,_,_,_,_)|T],InList,Moves):-
+    remove_cell(mosquito,Co,P,R,C),
+    add_cell(Bug,Co,P,R,C),
     piece_helper(cell(Bug,Co,P,R,C),OutList),
     append(OutList,InList,MyList),
-    return_moves(T,MyList,Moves).
+    remove_cell(Bug,Co,P,R,C),
+    add_cell(mosquito,Co,P,R,C),
+    get_mosquito_moves(cell(mosquito,Co,P,R,C),T,MyList,Moves).
 get_mosquito_moves(cell(mosquito,Co,P,R,C),[cell(Bug,_,_,_,_)],InList,Moves):-
+    remove_cell(mosquito,Co,P,R,C),
+    add_cell(Bug,Co,P,R,C),
     piece_helper(cell(Bug,Co,P,R,C),OutList),
+    remove_cell(Bug,Co,P,R,C),
+    add_cell(mosquito,Co,P,R,C),
     append(OutList,InList,Moves).
 get_mosquito_moves(cell(mosquito,_,_,_,_),[],Moves,Moves).
 
 ant_valid_moves(cell(ant,Co,P,R,C),WCells) :-
     remove_cell(ant,Co,P,R,C),
-    ant_walk_dfs(cell(ant,Co,P,R,C),[],WCells),
-    add_cell(ant,Co,P,R,C).
+    ant_walk_dfs(cell(ant,Co,P,R,C),[],PCells),
+    add_cell(ant,Co,P,R,C),
+    delete(PCells,cell(none,none,0,R,C),WCells).
 
 cell_non_visited_by_ant(Cell,Visited,Ncell):-
     get_neighbor_cell(Cell,Ncell),
     empty_cell(Ncell),
+    can_slide(Cell,Ncell),
     connected_to_hive(Ncell),
-    \+member(Ncell,Visited).
+    \+member(Ncell,Visited),!.
 
 ant_walk_dfs([],Visited,Visited) :- !.
 ant_walk_dfs([FCell|Cells],Visited,Path) :-
     !,
-    ant_walk_dfs(FCell,Visited,NVisited),
-    ant_walk_dfs(Cells,[FCell|NVisited],Path).
+    ant_walk_dfs(FCell,[FCell|Visited],NVisited),
+    ant_walk_dfs(Cells,NVisited,Path).
 ant_walk_dfs(Cell,Visited,Path) :-
     findall(Ncell, cell_non_visited_by_ant(Cell,Visited,Ncell), Ncells),
     ant_walk_dfs(Ncells,Visited,Path).
@@ -137,13 +168,25 @@ ant_walk_dfs(Cell,Visited,Path) :-
 pillbug_valid_moves(OCell,DCell) :-
     get_neighbor_cell(OCell,NCell),
     empty_cell(NCell),
+    can_slide(OCell,NCell),
     connected_to_hive_without_origin_cell(OCell,NCell),
     DCell = NCell.
 
-bug_movable_by_pillbug(PCell,MCell) :-
+bug_movable_by_pillbug(PCell,Color,MCell) :-
     get_neighbor_cell(PCell,NCell),
     \+empty_cell(NCell),
     \+top_of_pile(NCell),
+    (
+       (
+        Color = white,
+        \+is_last(NCell,black)
+       );
+       (
+         Color = black,
+        \+is_last(NCell,white)
+       )
+    ),
+    \+is_stunned(NCell),
     findall(BCell,bridge(PCell,NCell,BCell),Bridge),
     \+length(Bridge,2),
     hamiltonian_path(NCell),
@@ -153,13 +196,6 @@ valid_position_to_move_a_bug(PCell,VCell):-
     get_neighbor_cell(PCell,NCell),
     empty_cell(NCell),
     VCell = NCell.
-
-bridge(PCell,MCell,BCell) :-
-    get_neighbor_cell(MCell,NCell),
-    get_neighbor_cell(PCell,NCell),
-    \+empty_cell(NCell),
-    top_of_pile(NCell),
-    BCell = NCell.
 
 grasshopper_valid_moves(OCell,JCell) :-
     neighbor_n(OCell,NCell),

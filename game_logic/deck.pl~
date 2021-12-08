@@ -1,4 +1,4 @@
-:- module(deck, [add_deck/9,remove_deck/9,get_deck/2,get_decks/1,get_bug_count/3,reduce_bug_count/2]).
+:- module(deck, [add_deck/9,remove_deck/9,get_deck/1,get_decks/1,get_bug_count/3,reduce_bug_count/2, cleanup_decks/0]).
 
 :- dynamic deck/9.
 %la estructura deck que no es mas que la mano del jugador y su color
@@ -8,6 +8,7 @@
 add_deck(Color, Ant, Grasshopper, Beetle, Spider, QueenBee, Mosquito, LadyBug, PillBug) :-  assertz(deck(Color, Ant, Grasshopper, Beetle, Spider, QueenBee, Mosquito, LadyBug, PillBug)).
 %elimina la mano de un jugador de la base de datos
 remove_deck(Color, Ant, Grasshopper, Beetle, Spider, QueenBee, Mosquito, LadyBug, PillBug) :- retract(deck(Color, Ant, Grasshopper, Beetle, Spider, QueenBee, Mosquito, LadyBug, PillBug)).
+cleanup_decks :- retractall(deck(_,_,_,_,_,_,_,_,_)).
 %devuelve la mano de un jugador
 get_deck(deck(Color, Ant, Grasshopper, Beetle, Spider, QueenBee, Mosquito, LadyBug, PillBug)) :- deck(Color, Ant, Grasshopper, Beetle, Spider, QueenBee, Mosquito, LadyBug, PillBug).
 %devuelve las manos de los jugadores
